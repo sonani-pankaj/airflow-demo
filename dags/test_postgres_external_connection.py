@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.sdk.bases.hook import BaseHook
+from airflow.hooks.base import BaseHook
 
 
 # Default arguments for the DAG

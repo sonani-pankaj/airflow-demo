@@ -1,15 +1,21 @@
-# Production-optimized Airflow Dockerfile
+# Production-optimized Airflow Dockerfile (SLIM)
 # Build with: docker build --target production -t airflow-custom:latest .
+#
+# Image size comparison:
+#   apache/airflow:3.0.1 (all providers): ~2.5GB
+#   apache/airflow:slim-3.0.1:            ~800MB
+#   This image (with postgres only):      ~1GB
 
-ARG AIRFLOW_VERSION=3.1.6
-FROM apache/airflow:${AIRFLOW_VERSION} AS base
+ARG AIRFLOW_VERSION=3.0.1
+# Use SLIM base image - excludes all providers (saves ~1.5GB)
+FROM apache/airflow:slim-${AIRFLOW_VERSION} AS base
 
 # Metadata labels
 LABEL maintainer="your-team@example.com"
 LABEL org.opencontainers.image.source="https://github.com/your-org/airflow-demo"
-LABEL org.opencontainers.image.description="Production Apache Airflow with custom dependencies"
+LABEL org.opencontainers.image.description="Production Apache Airflow with PostgreSQL"
 
-# Install system dependencies if needed (as root)
+# Install only required system dependencies (as root)
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -23,14 +29,14 @@ USER airflow
 # Production stage
 FROM base AS production
 
-# Copy and install Python dependencies
-COPY --chown=airflow:0 pyproject.toml README.md /tmp/build/
-
-# Install dependencies with pip best practices
+# Install ONLY the providers you need
+# This keeps the image small instead of installing all providers
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir airflow-code-editor \
-    && pip install --no-cache-dir /tmp/build/ \
-    && rm -rf /tmp/build /root/.cache/pip
+    && pip install --no-cache-dir \
+        apache-airflow-providers-postgres \
+        apache-airflow-providers-common-sql \
+        airflow-code-editor \
+    && rm -rf ~/.cache/pip 2>/dev/null || true
 
 # Verify installation
 RUN python -c "import airflow; print(f'Airflow {airflow.__version__} installed successfully')"
@@ -49,11 +55,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 FROM base AS development
 
 RUN pip install --no-cache-dir \
+    apache-airflow-providers-postgres \
+    apache-airflow-providers-common-sql \
     airflow-code-editor \
     pytest \
     pytest-cov \
     black \
-    flake8
-
-COPY --chown=airflow:0 pyproject.toml README.md /tmp/build/
-RUN pip install --no-cache-dir /tmp/build/ && rm -rf /tmp/build
+    flake8 \
+    && rm -rf ~/.cache/pip 2>/dev/null || true

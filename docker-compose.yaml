@@ -14,13 +14,17 @@ x-airflow-common:
     context: .
     target: production
     cache_from:
-      - apache/airflow:3.1.6
+      - apache/airflow:slim-3.0.1
   env_file:
     - ${ENV_FILE_PATH:-.env}
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    # Use SimpleAuthManager (built into Airflow 3.0 core - no extra providers needed)
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
+    # For development/testing - allows any login as admin (disable in production!)
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: 'true'
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${POSTGRES_PASSWORD:-airflow}@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
     AIRFLOW__CORE__TEST_CONNECTION_ENABLED: 'false'
@@ -34,8 +38,6 @@ x-airflow-common:
     AIRFLOW_CONN_POSTGRES_EXTERNAL: 'postgresql://datauser:${POSTGRES_EXTERNAL_PASSWORD:-datapassword}@postgres-external:5432/datawarehouse'
     # Security settings
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-}
-    AIRFLOW__WEBSERVER__CSRF_ENABLED: 'true'
-    AIRFLOW__WEBSERVER__WTF_CSRF_ENABLED: 'true'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.session'
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags:ro
@@ -257,44 +259,27 @@ services:
         # Fix ownership only for logs (other volumes are read-only)
         chown -R "$${AIRFLOW_UID}:0" /opt/airflow/logs 2>/dev/null || true
         
-        # Run database migrations and create admin user via entrypoint
-        # The entrypoint handles _AIRFLOW_DB_MIGRATE and _AIRFLOW_WWW_USER_CREATE
-        /entrypoint airflow version
+        # Explicitly run database migration
+        echo "Running database migrations..."
+        airflow db migrate
         
-        # Create connection using Python directly (avoids loading providers again via CLI)
-        python3 << 'PYEOF'
-        from airflow.models import Connection
-        from airflow import settings
-        import os
+        # Note: SimpleAuthManager doesn't need user creation - users are defined via env var
+        # AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS
         
-        session = settings.Session()
-        conn_id = 'postgres_external_docker'
-        
-        # Delete existing connection if exists
-        session.query(Connection).filter(Connection.conn_id == conn_id).delete()
-        
-        # Create new connection
-        conn = Connection(
-            conn_id=conn_id,
-            conn_type='postgres',
-            host='postgres-external',
-            login='datauser',
-            password=os.environ.get('POSTGRES_EXTERNAL_PASSWORD', 'datapassword'),
-            port=5432,
-            schema='datawarehouse'
-        )
-        session.add(conn)
-        session.commit()
-        print(f'Connection {conn_id} created successfully')
-        PYEOF
+        # Create connection (runs after migration is complete)
+        echo "Creating postgres_external_docker connection..."
+        airflow connections delete postgres_external_docker 2>/dev/null || true
+        airflow connections add postgres_external_docker \
+          --conn-type postgres \
+          --conn-host postgres-external \
+          --conn-login datauser \
+          --conn-password "$${POSTGRES_EXTERNAL_PASSWORD:-datapassword}" \
+          --conn-port 5432 \
+          --conn-schema datawarehouse
         
         echo "Airflow initialization completed successfully"
     environment:
       <<: *airflow-common-env
-      _AIRFLOW_DB_MIGRATE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_WWW_USER_PASSWORD:-airflow}
     user: "0:0"
     depends_on:
       postgres:
