@@ -14,7 +14,7 @@ x-airflow-common:
     context: .
     target: production
     cache_from:
-      - apache/airflow:3.1.6
+      - apache/airflow:3.1.7
   env_file:
     - ${ENV_FILE_PATH:-.env}
   environment:
@@ -34,6 +34,7 @@ x-airflow-common:
     AIRFLOW_CONN_POSTGRES_EXTERNAL: 'postgresql://datauser:${POSTGRES_EXTERNAL_PASSWORD:-datapassword}@postgres-external:5432/datawarehouse'
     # Security settings
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-}
+    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-}
     AIRFLOW__WEBSERVER__CSRF_ENABLED: 'true'
     AIRFLOW__WEBSERVER__WTF_CSRF_ENABLED: 'true'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.session'

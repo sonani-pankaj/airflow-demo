@@ -1,7 +1,7 @@
 # Production-optimized Airflow Dockerfile
 # Build with: docker build --target production -t airflow-custom:latest .
 
-ARG AIRFLOW_VERSION=3.1.6
+ARG AIRFLOW_VERSION=3.1.7
 FROM apache/airflow:${AIRFLOW_VERSION} AS base
 
 # Metadata labels
@@ -30,7 +30,7 @@ COPY --chown=airflow:0 pyproject.toml README.md /tmp/build/
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir airflow-code-editor \
     && pip install --no-cache-dir /tmp/build/ \
-    && rm -rf /tmp/build /root/.cache/pip
+    && rm -rf /tmp/build
 
 # Verify installation
 RUN python -c "import airflow; print(f'Airflow {airflow.__version__} installed successfully')"

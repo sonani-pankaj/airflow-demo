@@ -17,3 +17,4 @@ logs/
 # Docker volumes and build
 postgres-db-volume/
 postgres-external-volume/
+logs/dag_processor/
