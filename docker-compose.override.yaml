@@ -1,0 +1,24 @@
+# Development overrides for docker-compose
+# This file is automatically loaded by docker-compose alongside docker-compose.yaml
+# Remove or rename this file in production deployments
+#
+# Usage:
+#   docker-compose up -d                    # Uses both files (development mode)
+#   docker-compose -f docker-compose.yaml up -d  # Production only
+
+x-dev-overrides:
+  &dev-overrides
+  environment:
+    # Enable debug features for development
+    AIRFLOW__CORE__TEST_CONNECTION_ENABLED: 'true'
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+    AIRFLOW__WEBSERVER__EXPOSE_SWAGGER_UI: 'true'
+
+services:
+  airflow-apiserver:
+    <<: *dev-overrides
+    # Port is defined in docker-compose.yaml - no override needed
+
+  postgres-external:
+    ports:
+      - "5450:5432"  # Bind to all interfaces for development access
